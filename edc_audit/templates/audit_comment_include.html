@@ -1,0 +1,24 @@
+<table> 
+<thead>
+<th></th>
+<th>#</th>
+<th>created</th>
+<th>modified</th>
+<th>user</th>
+<th>user modified</th>
+<th>comment</th>
+</thead>
+<tbody>
+{% for audit_comment in audit_comments %}   
+    <tr>
+    <td><A href="/admin/audit_trail/auditcomment/{{ audit_comment.pk }}/?next=audit_trail_url&app_label={{audit_comment.app_label}}&model_name={{audit_comment.model_name}}&audit_subject_identifier={{audit_comment.audit_subject_identifier}}&audit_id={{audit_comment.audit_id}}&visit_code={{ visit_code }}&visit_instance={{ visit_instance }}&dashboard_type={{ dashboard_type }}">edit</td>    
+    <td>{{ audit_comment.audit_id }}</td>
+    <td>{{ audit_comment.created }}</td>
+    <td>{{ audit_comment.modified }}</td>
+    <td>{{ audit_comment.user }}</td>
+    <td>{{ audit_comment.user_modified }}</td>                            
+    <td>{{ audit_comment }}</td>
+    </tr>
+{% endfor %}                    
+</tbody>
+</table>

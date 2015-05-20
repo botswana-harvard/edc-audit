@@ -1,0 +1,4 @@
+
+
+class BaseSyncUuidModel(object):
+    pass

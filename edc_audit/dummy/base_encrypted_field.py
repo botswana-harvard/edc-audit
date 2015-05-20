@@ -1,0 +1,4 @@
+
+
+class BaseEncryptedField(object):
+    pass

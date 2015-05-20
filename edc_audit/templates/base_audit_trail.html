@@ -1,0 +1,26 @@
+{% extends "section.html"%}
+{% load common_tags %}
+
+{% block section_links%}
+
+{% if back_url_name = 'dashboard_url' and audit_subject_identifier %}
+Back to <A href="{% url 'dashboard_url' subject_identifier=audit_subject_identifier dashboard_type=dashboard_type%}">dashboard for {{audit_subject_identifier }} </A>
+{% endif %}
+
+{% if back_url_name = 'dashboard_visit_url' and audit_subject_identifier %}
+Back to <A href="{% url dashboard_visit_url subject_identifier=audit_subject_identifier dashboard_type=dashboard_type visit_code=visit_code visit_instance=visit_instance %}">dashboard for {{audit_subject_identifier }} </A>
+{% endif %}
+
+
+<h5>Audit Trail:  {{ app_label }} {{ verbose_name }}</h5>
+{% include 'selector_buttons.html' %}
+{% block model_select_form %}{% endblock%}
+{% block audit_subject_identifier_form %}{% endblock%}
+
+
+<font color="red">{{ err_message }}</font>
+
+{% block app_labels %}{% endblock %}
+{% block model_names %}{% endblock %}
+{% block history %}{% endblock %}
+{% endblock %}

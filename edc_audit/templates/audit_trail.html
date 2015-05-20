@@ -1,0 +1,69 @@
+{% extends "base_audit_trail.html"%}
+{% load friendly_load %}
+
+{% friendly_load crypto_tags %}
+{% ifnot_has_tag encrypted%}
+    {% load dummy_encrypted %}
+{% endifnot_has_tag %}
+
+{% load common_tags %}
+
+{% block app_labels %}
+    {% include 'list_apps.html' %}
+{% endblock %}
+
+{% block model_names %}
+    {% include 'list_models.html' %}
+{% endblock %} 
+
+{% block model_select_form %}
+    {% include 'selector_form.html' %}
+{% endblock%}
+
+{% block audit_subject_identifier_form %}
+    {% include 'audit_trail_form.html' %}
+{% endblock%}
+
+{% block history %}
+
+    {% if not display_rows%}
+
+        <p><i>{{ status_message }}</i> </p>
+
+    {% else %}    
+
+        {% if audit_comments %}
+            <p><A href="#audit_comments"><small>jump to comments</small></A></p>
+        {% endif %}
+
+        <table> 
+        <thead>
+        <th>#</th>
+        <th>comment</th> 
+        {% for field_label in field_labels %}   
+        <th>{{ field_label }}</th>
+        {% endfor %}
+        </thead>
+        <tbody>
+        {% for row in display_rows %}
+            <tr><td>{{ forloop.counter }}</td>
+            {% for r in row %} 
+                {% if forloop.counter == 1 %}
+                    <td><A href="/admin/audit_trail/auditcomment/{{r}}/?next=audit_trail_url&app_label={{app_label}}&model_name={{model_name}}&audit_subject_identifier={{audit_subject_identifier}}&audit_id={{row.1}}&visit_code={{ visit_code }}&visit_instance={{ visit_instance }}&dashboard_type={{ dashboard_type }}">{% if r == 'add'%}add{% else %}edit{% endif %}</td>
+                {% else %}
+                <td>{{ r|encrypted }}</td>
+                {% endif %}
+            {% endfor %} 
+            </tr>                
+        {% endfor %}     
+        </tbody>
+        </table>
+
+        {% if audit_comments %}
+            <H4><A name="audit_comments">Comments logged for {{ audit_subject_identifier }}</H4>
+             {% include 'audit_comment_include.html' %}
+        {% endif %}
+    
+    {% endif %}
+    
+{% endblock %}
