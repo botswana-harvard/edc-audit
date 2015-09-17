@@ -4,20 +4,19 @@ import re
 import datetime
 import json
 
-from django_extensions.db.fields import UUIDField
 
+from django.db.models.loading import get_model
 from django.db import models
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib import admin
 from django.core.serializers.json import DjangoJSONEncoder
 
-from edc.base.model.fields import UUIDAutoField
-from django_crypto_fields.fields import BaseEncryptedField
-from edc.device.sync.classes import SerializeToTransaction
-from edc.device.sync.models import BaseSyncUuidModel
+from edc_base.model.fields import UUIDAutoField, UUIDField
+from edc_base.utils.convert_from_camel import convert_from_camel
+# from edc.device.sync.classes import SerializeToTransaction
+# from edc.device.sync.models import BaseSyncUuidModel
 
 from edc_audit import GLOBAL_TRACK_FIELDS
-from edc.core.bhp_common.utils.convert_from_camel import convert_from_camel
 
 value_error_re = re.compile("^.+'(.+)'$")
 
@@ -48,11 +47,13 @@ class BaseAuditModelAdmin(admin.ModelAdmin):
 
 class AuditTrail(object):
     def __init__(self, show_in_admin=False, save_change_type=True, audit_deletes=True,
-                 track_fields=None):
+                 track_fields=None, serializer=None, serializable_model_class=None):
         self.opts = {}
-        self.opts['show_in_admin'] = False # show_in_admin
+        self.opts['show_in_admin'] = False  # show_in_admin
         self.opts['save_change_type'] = save_change_type
         self.opts['audit_deletes'] = audit_deletes
+        self.serializer = serializer
+        self.serializable_model_class = serializable_model_class
         if track_fields:
             self.opts['track_fields'] = track_fields
         else:
@@ -92,7 +93,7 @@ class AuditTrail(object):
                     # instance is the current (non-edc_audit) model.
                     kwargs = {}
                     for field in sender._meta.fields:
-                        if isinstance(field, BaseEncryptedField):
+                        try:
                             # slip hash in to silence encryption
                             value = getattr(instance, field.name)
                             if isinstance(value, datetime.date):
@@ -101,7 +102,7 @@ class AuditTrail(object):
                                 kwargs[field.name] = field.field_cryptor.get_hash_with_prefix(value)
                             else:
                                 kwargs[field.name] = value
-                        else:
+                        except AttributeError:
                             try:
                                 kwargs[field.name] = getattr(instance, field.name)
                             except instance.DoesNotExist:
@@ -125,16 +126,13 @@ class AuditTrail(object):
             def _serialize_on_save(sender, instance, raw, created, using, **kwargs):
                 """ serialize the AUDIT model instance to the outgoing transaction model """
                 if not raw:
-                    model = models.get_model(instance._meta.app_label, instance._meta.object_name.lower().replace('edc_audit', ''))
-                    if issubclass(model, BaseSyncUuidModel):
-                        serialize_to_transaction = SerializeToTransaction()
-                        serialize_to_transaction.serialize(sender, instance, raw, created, using, **kwargs)
-#            connected = False
-#            for sig in models.signals.post_save.receivers:
-#                if sig[0][0] == 'audit_serialize_on_save':
-#                    connected = True
-#                    break
-#            if not connected:
+                    try:
+                        model = get_model(instance._meta.app_label, instance._meta.object_name.lower().replace('edc_audit', ''))
+                        if issubclass(model, self.serializable_model_class):
+                            serialize_to_transaction = self.serializer()
+                            serialize_to_transaction.serialize(sender, instance, raw, created, using, **kwargs)
+                    except TypeError:
+                        pass
             models.signals.post_save.connect(_serialize_on_save, sender=model, weak=False, dispatch_uid='audit_serialize_on_save_{0}'.format(model._meta.object_name.lower()))
             # end: erikvw added for serialization
 
@@ -221,7 +219,7 @@ def create_audit_model(cls, **kwargs):
         '_audit__str__': cls.__str__.im_func,
         '__str__': lambda self: '%s' % (self._audit__str__()),
         '_audit_track': _track_fields(track_fields=kwargs['track_fields'], unprocessed=True),
-        '_deserialize_post': BaseSyncUuidModel()._deserialize_post,
+        # '_deserialize_post': BaseSyncUuidModel()._deserialize_post,
     }
 
     try:
@@ -240,7 +238,7 @@ def create_audit_model(cls, **kwargs):
             # Audit models have a separate AutoField called _audit_id
             # id is demoted to a normal field (or whatever the auto field is named)
             if isinstance(field, UUIDAutoField):
-                attrs[field.name] = UUIDField(auto=False, editable=False)
+                attrs[field.name] = UUIDField(auto=False, editable=False, primary_key=False)
                 new_field = UUIDAutoField(primary_key=True)
             else:
                 attrs[field.name] = models.IntegerField(db_index=True, editable=False)
