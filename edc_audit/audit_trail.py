@@ -60,7 +60,7 @@ class AuditTrail(object):
     def contribute_to_class(self, cls, name):
         # This should only get added once the class is otherwise complete
         def _contribute(sender, **kwargs):
-            model = create_audit_model(sender, **self.opts)
+            model = create_audit_model(sender, self.serializer, self.serializable_model_class, **self.opts)
             if self.opts['show_in_admin']:
                 # Enable admin integration
                 # If ModelAdmin needs options or different base class, find
@@ -199,7 +199,7 @@ def create_audit_manager_class(manager):
     return AuditTrailManager()
 
 
-def create_audit_model(cls, **kwargs):
+def create_audit_model(cls, serializer, serializable_model_class, **kwargs):
     """Create an edc_audit model for the specific class"""
     name = cls.__name__ + 'Audit'
 
@@ -217,14 +217,13 @@ def create_audit_model(cls, **kwargs):
         '_audit__str__': cls.__str__.im_func,
         '__str__': lambda self: '%s' % (self._audit__str__()),
         '_audit_track': _track_fields(track_fields=kwargs['track_fields'], unprocessed=True),
-        # '_deserialize_post': BaseSyncUuidModel()._deserialize_post,
     }
-
+    if serializable_model_class:
+        attrs.update({'_deserialize_post': serializable_model_class()._deserialize_post})
     try:
         attrs['natural_key'] = cls.natural_key
     except AttributeError:
         pass
-
     if 'save_change_type' in kwargs and kwargs['save_change_type']:
         attrs['_audit_change_type'] = models.CharField(max_length=1)
 
