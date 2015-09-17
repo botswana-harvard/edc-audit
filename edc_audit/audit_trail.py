@@ -13,8 +13,6 @@ from django.core.serializers.json import DjangoJSONEncoder
 
 from edc_base.model.fields import UUIDAutoField, UUIDField
 from edc_base.utils.convert_from_camel import convert_from_camel
-# from edc.device.sync.classes import SerializeToTransaction
-# from edc.device.sync.models import BaseSyncUuidModel
 
 from edc_audit import GLOBAL_TRACK_FIELDS
 

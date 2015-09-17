@@ -22,9 +22,6 @@ setup(
     long_description=README,
     zip_safe=False,
     keywords='audit trail for Django apps',
-    install_requires=[
-        'Django>=1.7',
-    ],
     classifiers=[
         'Environment :: Web Environment',
         'Framework :: Django',
