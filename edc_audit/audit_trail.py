@@ -1,11 +1,11 @@
-""" https://github.com/LaundroMat/django-AuditTrail/blob/master/edc_audit.py """
+""" https://github.com/LaundroMat/django-AuditTrail/blob/master/audit.py """
 import copy
 import re
 import datetime
 import json
 
 
-from django.db.models.loading import get_model
+from django import get_version
 from django.db import models
 from django.core.exceptions import ImproperlyConfigured
 from django.contrib import admin
@@ -17,6 +17,9 @@ from edc_base.utils.convert_from_camel import convert_from_camel
 from edc_audit import GLOBAL_TRACK_FIELDS
 
 value_error_re = re.compile("^.+'(.+)'$")
+
+if not get_version().startswith('1.6'):
+    raise ImportError('This module is for 1.6 only')
 
 
 class BaseAuditModelAdmin(admin.ModelAdmin):
@@ -45,13 +48,11 @@ class BaseAuditModelAdmin(admin.ModelAdmin):
 
 class AuditTrail(object):
     def __init__(self, show_in_admin=False, save_change_type=True, audit_deletes=True,
-                 track_fields=None, serializer=None, serializable_model_class=None):
+                 track_fields=None):
         self.opts = {}
         self.opts['show_in_admin'] = False  # show_in_admin
         self.opts['save_change_type'] = save_change_type
         self.opts['audit_deletes'] = audit_deletes
-        self.serializer = serializer
-        self.serializable_model_class = serializable_model_class
         if track_fields:
             self.opts['track_fields'] = track_fields
         else:
@@ -60,7 +61,7 @@ class AuditTrail(object):
     def contribute_to_class(self, cls, name):
         # This should only get added once the class is otherwise complete
         def _contribute(sender, **kwargs):
-            model = create_audit_model(sender, self.serializer, self.serializable_model_class, **self.opts)
+            model = create_audit_model(sender, **self.opts)
             if self.opts['show_in_admin']:
                 # Enable admin integration
                 # If ModelAdmin needs options or different base class, find
@@ -125,11 +126,8 @@ class AuditTrail(object):
                 """ serialize the AUDIT model instance to the outgoing transaction model """
                 if not raw:
                     try:
-                        model = get_model(instance._meta.app_label, instance._meta.object_name.lower().replace('edc_audit', ''))
-                        if issubclass(model, self.serializable_model_class):
-                            serialize_to_transaction = self.serializer()
-                            serialize_to_transaction.serialize(sender, instance, raw, created, using, **kwargs)
-                    except TypeError:
+                        instance.serialize(sender, instance, raw, created, using, **kwargs)
+                    except (AttributeError, TypeError):
                         pass
             models.signals.post_save.connect(_serialize_on_save, sender=model, weak=False, dispatch_uid='audit_serialize_on_save_{0}'.format(model._meta.object_name.lower()))
             # end: erikvw added for serialization
@@ -199,7 +197,7 @@ def create_audit_manager_class(manager):
     return AuditTrailManager()
 
 
-def create_audit_model(cls, serializer, serializable_model_class, **kwargs):
+def create_audit_model(cls, **kwargs):
     """Create an edc_audit model for the specific class"""
     name = cls.__name__ + 'Audit'
 
@@ -218,8 +216,11 @@ def create_audit_model(cls, serializer, serializable_model_class, **kwargs):
         '__str__': lambda self: '%s' % (self._audit__str__()),
         '_audit_track': _track_fields(track_fields=kwargs['track_fields'], unprocessed=True),
     }
-    if serializable_model_class:
-        attrs.update({'_deserialize_post': serializable_model_class()._deserialize_post})
+    try:
+        attrs.update({'serialize': cls.serialize.im_func})
+        attrs.update({'_deserialize_post': cls._deserialize_post.im_func})
+    except AttributeError:
+        pass
     try:
         attrs['natural_key'] = cls.natural_key
     except AttributeError:
