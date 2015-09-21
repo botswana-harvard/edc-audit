@@ -1,0 +1,38 @@
+<form action="." method="POST">
+<div style='display:none'>  
+  {% csrf_token %}
+</div>
+<table>
+<tr>
+<td class="field">
+    {{ form.app_label.errors }}
+    <label for="id_app_label">App_label</label>
+    {{ form.app_label }}
+</td>
+<td class="field">
+    {{ form.model_name.errors }}
+    <label for="id_model_name">Model Name</label>
+    {{ form.model_name }}
+</td>
+<td class="field">
+    {{ form.audit_subject_identifier.errors }}
+    <label for="id_audit_subject_identifier">Subject Identifier</label>
+    {{ form.audit_subject_identifier }}
+</td>
+<td>
+    <input type="hidden" name="back_url_name" id="back_url_name" value="{{ back_url_name }}">
+    <input type="hidden" name="dashboard_type" id="dashboard_type" value="{{ dashboard_type }}">
+    <input type="hidden" name="visit_code" id="visit_code" value="{{ visit_code }}">
+    <input type="hidden" name="visit_instance" id="visit_instance" value="{{ visit_instance }}">        
+    <input type="submit" value="Search" class="default" name="submit" />
+</td>
+
+<script type="text/javascript">document.getElementById("id_audit_subject_identifier").focus();</script>
+<script type="text/javascript">
+    (function($) {
+        var field = null;
+    })(django.jQuery);
+</script>
+    </table>
+</form>
+
