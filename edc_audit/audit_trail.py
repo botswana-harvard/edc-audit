@@ -217,6 +217,14 @@ def create_audit_model(cls, **kwargs):
         '_audit_track': _track_fields(track_fields=kwargs['track_fields'], unprocessed=True),
     }
     try:
+        attrs.update({'visit_model': cls.visit_model})
+    except AttributeError:
+        pass
+    try:
+        attrs.update({'visit_model_attr': cls.visit_model_attr})
+    except AttributeError:
+        pass
+    try:
         attrs.update({'serialize': cls.serialize.im_func})
         attrs.update({'_deserialize_post': cls._deserialize_post.im_func})
     except AttributeError:
