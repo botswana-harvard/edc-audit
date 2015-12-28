@@ -7,3 +7,4 @@ pytz
 git+https://github.com/erikvw/django-revision@develop#egg=django-revision
 git+https://github.com/botswana-harvard/edc-device@develop#egg=edc-device
 git+https://github.com/botswana-harvard/edc-sync@develop#egg=edc-sync
+git+https://github.com/botswana-harvard/edc-base@develop#egg=edc-base
