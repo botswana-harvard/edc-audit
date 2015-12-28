@@ -1,5 +1,6 @@
 Django==1.6
 python-dateutil
+django-extensions
 Unipath
 GitPython
 factory-boy
