@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/botswana-harvard/edc-audit.svg?branch=develop)](https://travis-ci.org/botswana-harvard/edc-audit)
+[![Build Status](https://travis-ci.org/botswana-harvard/edc-audit.svg?branch=develop)](https://travis-ci.org/botswana-harvard/edc-audit) [![Coverage Status](https://coveralls.io/repos/botswana-harvard/edc-audit/badge.svg?branch=develop&service=github)](https://coveralls.io/github/botswana-harvard/edc-audit?branch=develop)
 
 # edc-audit
 
