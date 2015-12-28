@@ -28,10 +28,11 @@ class AuditTrailError(Exception):
 
 
 class AuditTrail(object):
+
     def __init__(self, show_in_admin=False, save_change_type=True, audit_deletes=True,
                  track_fields=None):
         self.opts = {}
-        self.opts['show_in_admin'] = False  # show_in_admin
+        self.opts['show_in_admin'] = False
         self.opts['save_change_type'] = save_change_type
         self.opts['audit_deletes'] = audit_deletes
         if track_fields:
@@ -88,10 +89,7 @@ class AuditTrail(object):
                             except instance.DoesNotExist:
                                 kwargs[field.name] = None
                     if self.opts['save_change_type']:
-                        if created:
-                            kwargs['_audit_change_type'] = 'I'
-                        else:
-                            kwargs['_audit_change_type'] = 'U'
+                        kwargs['_audit_change_type'] = 'I' if created else 'U'
                     for field_arr in model._audit_track:
                         kwargs[field_arr[0]] = _audit_track(instance, field_arr)
                     model._default_manager.create(**kwargs)
@@ -111,16 +109,11 @@ class AuditTrail(object):
                     for field_arr in model._audit_track:
                         kwargs[field_arr[0]] = _audit_track(instance, field_arr)
                     model._default_manager.create(**kwargs)
-                # Uncomment this line for pre r8223 Django builds
-                # dispatcher.connect(_audit_delete, signal=models.signals.pre_delete, sender=cls, weak=False)
-                # Comment this line for pre r8223 Django builds
+
                 models.signals.pre_delete.connect(
                     _audit_delete, sender=cls, weak=False,
                     dispatch_uid='audit_delete_{0}'.format(model._meta.object_name.lower()))
 
-        #  Uncomment this line for pre r8223 Django builds
-        # dispatcher.connect(_contribute, signal=models.signals.class_prepared, sender=cls, weak=False)
-        # Comment this line for pre r8223 Django builds
         models.signals.class_prepared.connect(_contribute, sender=cls, weak=False)
 
 
@@ -152,21 +145,32 @@ def create_audit_manager_with_pk(manager, pk_attribute, pk):
             if self._db is not None:
                 qs = qs.using(self._db)
             return qs
+
     return AuditTrailWithPkManager()
 
 
 def create_audit_manager_class(manager):
     """Create an audit trail manager based on the current object"""
     class AuditTrailManager(manager.__class__):
+
         def __init__(self, *arg, **kw):
             super(AuditTrailManager, self).__init__(*arg, **kw)
             self.model = manager.model
+
+        def get_by_natural_key(self, audit_id):
+            return self.get(_audit_id=audit_id)
+
     return AuditTrailManager()
 
 
 def create_audit_model(cls, **kwargs):
     """Create an audit model for the specific class"""
     name = cls.__name__ + 'Audit'
+
+    class AuditManager(models.Manager):
+
+        def get_by_natural_key(self, audit_id):
+            return self.get(_audit_id=audit_id)
 
     class Meta:
         db_table = '%s_audit' % cls._meta.db_table
@@ -175,6 +179,86 @@ def create_audit_model(cls, **kwargs):
         ordering = ['-_audit_timestamp']
 
     # Set up a dictionary to simulate declarations within a class
+    attrs = get_audit_model_attrs(cls, Meta, kwargs)
+
+    # Copy the fields from the existing model to the audit model
+    cls, attrs = copy_fields_from_source_model(cls, attrs)
+
+    attrs['objects'] = AuditManager()
+
+    for track_field in _track_fields(kwargs['track_fields']):
+        if track_field['name'] in attrs:
+            raise NameError(
+                'Field named "%s" already exists in edc_audit version of %s' % (track_field['name'], cls.__name__))
+        attrs[track_field['name']] = copy.copy(track_field['field'])
+
+    return type(name, (models.Model,), attrs)
+
+
+def add_visit_tracking_attrs(cls, attrs):
+    """Adds attrs needed to determine the visit model."""
+    try:
+        attrs.update({'visit_model': cls.visit_model})
+    except AttributeError:
+        pass
+    try:
+        attrs.update({'visit_model_attr': cls.visit_model_attr})
+    except AttributeError:
+        pass
+    return attrs
+
+
+def add_sync_attrs(cls, attrs):
+
+    def natural_key(self):
+        return (self._audit_id, )
+    try:
+        attrs.update({'to_outgoing_transaction': cls.to_outgoing_transaction.im_func})
+        attrs.update({'is_serialized': cls.is_serialized.im_func})
+        attrs.update({'encrypted_json': cls.encrypted_json.im_func})
+        attrs.update({'_deserialize_post': cls._deserialize_post.im_func})
+    except AttributeError:
+        pass
+    attrs['natural_key'] = natural_key
+#     try:
+#         attrs['natural_key'] = cls.natural_key
+#     except AttributeError:
+#         pass
+    return attrs
+
+
+def _build_track_field(track_item):
+    track = {}
+    track['name'] = track_item[0]
+    if isinstance(track_item[1], models.Field):
+        track['field'] = track_item[1]
+    elif issubclass(track_item[1], models.Model):
+        track['field'] = models.ForeignKey(track_item[1])
+    else:
+        raise TypeError('Track fields only support items that are Fields or Models.')
+    return track
+
+
+def _track_fields(track_fields=None, unprocessed=False):
+    # Add in the fields from the Audit class "track" attribute.
+    track_fields_found = []
+#     global_track_fields = getattr(GLOBAL_TRACK_FIELDS, 'GLOBAL_TRACK_FIELDS', [])
+    global_track_fields = GLOBAL_TRACK_FIELDS or []
+    for track_item in global_track_fields:
+        if unprocessed:
+            track_fields_found.append(track_item)
+        else:
+            track_fields_found.append(_build_track_field(track_item))
+    if track_fields:
+        for track_item in track_fields:
+            if unprocessed:
+                track_fields_found.append(track_item)
+            else:
+                track_fields_found.append(_build_track_field(track_item))
+    return track_fields_found
+
+
+def get_audit_model_attrs(cls, Meta, kwargs):
     attrs = {
         '__module__': cls.__module__,
         'Meta': Meta,
@@ -190,8 +274,10 @@ def create_audit_model(cls, **kwargs):
 
     if 'save_change_type' in kwargs and kwargs['save_change_type']:
         attrs['_audit_change_type'] = models.CharField(max_length=1)
+    return attrs
 
-    # Copy the fields from the existing model to the edc_audit model
+
+def copy_fields_from_source_model(cls, attrs):
     for field in cls._meta.fields:
         if field.name in attrs:
             raise ImproperlyConfigured(
@@ -232,70 +318,4 @@ def create_audit_model(cls, **kwargs):
                 rel = copy.copy(field.rel)
                 rel.related_name = '_audit_' + field.related_query_name()
                 attrs[field.name].rel = rel
-
-    for track_field in _track_fields(kwargs['track_fields']):
-        if track_field['name'] in attrs:
-            raise NameError(
-                'Field named "%s" already exists in edc_audit version of %s' % (track_field['name'], cls.__name__))
-        attrs[track_field['name']] = copy.copy(track_field['field'])
-
-    return type(name, (models.Model,), attrs)
-
-
-def add_visit_tracking_attrs(cls, attrs):
-    """Adds attrs needed to determine the visit model."""
-    try:
-        attrs.update({'visit_model': cls.visit_model})
-    except AttributeError:
-        pass
-    try:
-        attrs.update({'visit_model_attr': cls.visit_model_attr})
-    except AttributeError:
-        pass
-    return attrs
-
-
-def add_sync_attrs(cls, attrs):
-    try:
-        attrs.update({'to_outgoing_transaction': cls.to_outgoing_transaction.im_func})
-        attrs.update({'is_serialized': cls.is_serialized.im_func})
-        attrs.update({'encrypted_json': cls.encrypted_json.im_func})
-        attrs.update({'_deserialize_post': cls._deserialize_post.im_func})
-    except AttributeError:
-        pass
-    try:
-        attrs['natural_key'] = cls.natural_key
-    except AttributeError:
-        pass
-    return attrs
-
-
-def _build_track_field(track_item):
-    track = {}
-    track['name'] = track_item[0]
-    if isinstance(track_item[1], models.Field):
-        track['field'] = track_item[1]
-    elif issubclass(track_item[1], models.Model):
-        track['field'] = models.ForeignKey(track_item[1])
-    else:
-        raise TypeError('Track fields only support items that are Fields or Models.')
-    return track
-
-
-def _track_fields(track_fields=None, unprocessed=False):
-    # Add in the fields from the Audit class "track" attribute.
-    track_fields_found = []
-#     global_track_fields = getattr(GLOBAL_TRACK_FIELDS, 'GLOBAL_TRACK_FIELDS', [])
-    global_track_fields = GLOBAL_TRACK_FIELDS or []
-    for track_item in global_track_fields:
-        if unprocessed:
-            track_fields_found.append(track_item)
-        else:
-            track_fields_found.append(_build_track_field(track_item))
-    if track_fields:
-        for track_item in track_fields:
-            if unprocessed:
-                track_fields_found.append(track_item)
-            else:
-                track_fields_found.append(_build_track_field(track_item))
-    return track_fields_found
+    return cls, attrs

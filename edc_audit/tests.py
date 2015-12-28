@@ -4,8 +4,10 @@ from django.db import models
 from django.test import TestCase
 
 from edc_audit.audit_trail import AuditTrail
-from edc_base.model.models.base_uuid_model import BaseUuidModel
-from django.core import serializers
+from edc_base.model.models import BaseUuidModel
+from edc_sync.models import SyncModelMixin
+from edc_sync.models.outgoing_transaction import OutgoingTransaction
+from django.test.utils import override_settings
 
 
 class Transaction(models.Model):
@@ -16,21 +18,22 @@ class Transaction(models.Model):
         app_label = 'edc_audit'
 
 
-class SyncModel(models.Model):
+class TestManager(models.Manager):
 
-    def serialize(self, sender, instance, raw, created, using, **kwargs):
-        tx = serializers.serialize("json", [instance, ], ensure_ascii=False, use_natural_keys=False)
-        Transaction.objects.create(tx=tx)
-
-    def _deserialize_post(self):
-        pass
+    def get_by_natural_key(self, field1):
+        return self.get(field1=field1)
 
 
-class TestAuditedSyncModel(SyncModel):
+class TestAuditedSyncModel(SyncModelMixin, BaseUuidModel):
 
-    field1 = models.CharField(max_length=10)
+    field1 = models.CharField(max_length=10, unique=True)
+
+    objects = TestManager()
 
     history = AuditTrail()
+
+    def natural_key(self):
+        return (self.field1, )
 
     class Meta:
         app_label = 'edc_audit'
@@ -88,8 +91,28 @@ class TestAudit(TestCase):
         self.assertTrue(re.match(regex, pk))
         self.assertEqual(test_audited_model.history.filter(field1='erik').count(), 1)
 
-    def test_serialize_called_in_signal(self):
+    @override_settings(ALLOW_MODEL_SERIALIZATION=True)
+    def test_audit_class_has_attrs(self):
         test_audited_model = TestAuditedSyncModel.objects.create(field1='erik')
-        self.assert_(test_audited_model.history.model.serialize)
-        self.assert_(test_audited_model.history.model._deserialize_post)
-        self.assertEqual(Transaction.objects.count(), 1)
+        self.assert_(test_audited_model.history.model.to_outgoing_transaction)
+        self.assert_(test_audited_model.history.model.is_serialized)
+        self.assert_(test_audited_model.history.model.natural_key)
+        self.assert_(test_audited_model.history.model.objects.get_by_natural_key)
+        self.assertTrue(test_audited_model.history.model().is_serialized())
+
+    @override_settings(ALLOW_MODEL_SERIALIZATION=True)
+    def test_serialize_called_in_signal(self):
+        obj = TestAuditedSyncModel.objects.create(field1='erik')
+        self.assertEqual(OutgoingTransaction.objects.filter(tx_name='TestAuditedSyncModel').count(), 1)
+        self.assertEqual(OutgoingTransaction.objects.filter(tx_name='TestAuditedSyncModelAudit').count(), 1)
+        obj.save()
+        self.assertEqual(OutgoingTransaction.objects.filter(
+            tx_name='TestAuditedSyncModel',
+            action='I').count(), 1)
+        self.assertEqual(OutgoingTransaction.objects.filter(
+            tx_name='TestAuditedSyncModel',
+            action='U').count(), 1)
+        # audit is always a new instance
+        self.assertEqual(OutgoingTransaction.objects.filter(
+            tx_name='TestAuditedSyncModelAudit',
+            action='I',).count(), 2)
