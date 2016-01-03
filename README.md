@@ -4,6 +4,11 @@
 
 (based on code from Marty Alchin's audit.py)
 
+This code differs from the original code from Marty Alchin's `audit.py` in that it:
+* adds support for models using `OneToOneField`;
+* adds Edc specific attrs to the history class from `edc_visit_tracking`;
+* adds `natural_key` and `get_by_natural_key` methods for serialization with `edc_sync`.
+
 In the Edc, `AuditTrail` is imported from `edc_base.audit_trail` to simplify changing to `django-simple-history` if and when that happens. 
 
 Add an audit trail to your model like this:
