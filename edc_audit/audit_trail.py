@@ -92,15 +92,15 @@ class AuditTrail(object):
                         kwargs['_audit_change_type'] = 'I' if created else 'U'
                     for field_arr in model._audit_track:
                         kwargs[field_arr[0]] = _audit_track(instance, field_arr)
-                    model._default_manager.create(**kwargs)
+                    model._default_manager.using(using).create(**kwargs)
 
             models.signals.post_save.connect(
                 _audit, sender=cls, weak=False,
                 dispatch_uid='audit_on_save_{0}'.format(model._meta.object_name.lower()))
 
             if self.opts['audit_deletes']:
-                def _audit_delete(sender, instance, **kwargs):
-                    # Write model changes to the edc_audit model
+                def _audit_delete(sender, instance, using, **kwargs):
+                    # Write model changes to the audit model
                     kwargs = {}
                     for field in sender._meta.fields:
                         kwargs[field.name] = getattr(instance, field.name)
@@ -108,7 +108,7 @@ class AuditTrail(object):
                         kwargs['_audit_change_type'] = 'D'
                     for field_arr in model._audit_track:
                         kwargs[field_arr[0]] = _audit_track(instance, field_arr)
-                    model._default_manager.create(**kwargs)
+                    model._default_manager.using(using).create(**kwargs)
 
                 models.signals.pre_delete.connect(
                     _audit_delete, sender=cls, weak=False,
@@ -220,10 +220,6 @@ def add_sync_attrs(cls, attrs):
     except AttributeError:
         pass
     attrs['natural_key'] = natural_key
-#     try:
-#         attrs['natural_key'] = cls.natural_key
-#     except AttributeError:
-#         pass
     return attrs
 
 
