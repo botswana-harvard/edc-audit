@@ -216,7 +216,7 @@ def add_sync_attrs(cls, attrs):
         attrs.update({'to_outgoing_transaction': cls.to_outgoing_transaction.im_func})
         attrs.update({'is_serialized': cls.is_serialized.im_func})
         attrs.update({'encrypted_json': cls.encrypted_json.im_func})
-        attrs.update({'_deserialize_post': cls._deserialize_post.im_func})
+        attrs.update({'sync_producer': cls.sync_producer.im_func})
     except AttributeError:
         pass
     attrs['natural_key'] = natural_key
