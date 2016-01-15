@@ -14,7 +14,7 @@ def get_subject_identifier(obj):
     subject_identifier = None
     try:
         subject_identifier = obj.subject_identifier()
-    except TypeError:
+    except (AttributeError, TypeError):
         try:
             subject_identifier = obj.subject_identifier
         except AttributeError:
