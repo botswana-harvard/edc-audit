@@ -11,13 +11,17 @@ def get_subject_identifier(obj):
     If subject_identifier is not a field, have the model class
     return the subject_identifier from method `get_subject_identifier`.
     """
+    subject_identifier = None
     try:
-        subject_identifier = obj.subject_identifier
-    except AttributeError:
+        subject_identifier = obj.subject_identifier()
+    except TypeError:
         try:
-            subject_identifier = obj.get_subject_identifier()
+            subject_identifier = obj.subject_identifier
         except AttributeError:
-            subject_identifier = None
+            try:
+                subject_identifier = obj.get_subject_identifier()
+            except AttributeError:
+                pass
     return subject_identifier
 
 
