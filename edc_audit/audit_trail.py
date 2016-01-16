@@ -4,7 +4,6 @@ import datetime
 import json
 import re
 
-
 from django import get_version
 from django.contrib import admin
 from django.core.exceptions import ImproperlyConfigured
